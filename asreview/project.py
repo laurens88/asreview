@@ -35,7 +35,7 @@ import jsonschema
 import pandas as pd
 from filelock import FileLock
 
-from asreview import load_dataset
+from asreview.data.loader import load_dataset
 from asreview.config import LABEL_NA
 from asreview.config import PROJECT_MODES
 from asreview.config import PROJECT_MODE_EXPLORE

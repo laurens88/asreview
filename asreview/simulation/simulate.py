@@ -25,6 +25,8 @@ from asreview.config import DEFAULT_N_INSTANCES
 from asreview.config import LABEL_NA
 from asreview.state.contextmanager import open_state
 
+from scipy.special import expit
+import inspect
 
 class Simulate:
     """ASReview Simulation mode class.
@@ -189,8 +191,25 @@ class Simulate:
                 self.fm, y_sample_input, train_idx
             )
 
-        self.classifier.fit(X_train, y_train)
-        relevance_scores = self.classifier.predict_proba(self.fm)
+        if hasattr(self.classifier, "partial_fit"):
+            classes = np.unique(y_train)
+            if 'classes' in inspect.signature(self.classifier.partial_fit).parameters:
+                self.classifier.partial_fit(X_train, y_train, classes=classes)
+            else:
+                self.classifier.partial_fit(X_train, y_train)
+            decision_scores = self.classifier.decision_function(self.fm)
+
+            prob_1 = expit(decision_scores)
+            prob_0 = 1 - prob_1
+
+            relevance_scores = np.vstack((prob_0, prob_1)).T
+
+        else:
+            self.classifier.fit(X_train, y_train)
+            if hasattr(self.classifier, 'predict_proba'):
+                relevance_scores = self.classifier.predict_proba(self.fm)
+            else:
+                relevance_scores = self.classifier._predict_proba_lr(self.fm)
 
         ranked_record_ids = self.query_strategy.query(
             feature_matrix=self.fm,
@@ -201,7 +220,7 @@ class Simulate:
             {
                 "record_id": ranked_record_ids,
                 "ranking": range(len(ranked_record_ids)),
-                "classifier": self.classifier.name,
+                "classifier": self.classifier.__class__.__name__,
                 "query_strategy": self.query_strategy.name,
                 "balance_strategy": self.balance_strategy.name
                 if self.balance_strategy
@@ -251,7 +270,7 @@ class Simulate:
             feature_extraction = None
             training_set = None
         else:
-            classifier = self.classifier.name
+            classifier = self.classifier.__class__.__name__
             query_strategy = self.query_strategy.name
             balance_strategy = (
                 self.balance_strategy.name if self.balance_strategy else None,
